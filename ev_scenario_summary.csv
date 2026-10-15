@@ -1,0 +1,5 @@
+ev_count,charger_kw,power_factor,total_ev_power_mw,converged,status,min_voltage_pu,max_voltage_pu,min_voltage_change_pu,low_voltage_bus_count,high_voltage_bus_count,voltage_violation_bus_ids,new_voltage_violation_bus_ids,total_active_load_mw,active_losses_mw,lines_assessed,lines_unassessable,line_overloads,max_assessed_line_loading_percent,error
+0,7.2,0.98,0.0,True,REVIEW,0.9130904822858367,1.0,0.0,21,0,"[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]",[],3.715,0.2026771126692436,0,32,0,,
+10,7.2,0.98,0.072,True,REVIEW,0.9122867392245587,1.0,-0.0008037430612779506,21,0,"[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]",[],3.7869999999999995,0.20809713611837394,0,32,0,,
+25,7.2,0.98,0.18,True,REVIEW,0.9109502621295639,1.0,-0.0021402201562727985,21,0,"[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]",[],3.8949999999999996,0.21733043221763404,0,32,0,,
+50,7.2,0.98,0.36,True,REVIEW,0.9083615824311021,1.0,-0.0047288998547345695,21,0,"[5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]",[],4.074999999999999,0.23358577071798514,0,32,0,,

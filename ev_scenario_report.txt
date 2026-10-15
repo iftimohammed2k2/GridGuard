@@ -1,0 +1,81 @@
+========================================================================
+GRIDGUARD - EV CHARGING SCENARIO ANALYSIS
+========================================================================
+Voltage limits: 0.95–1.05 p.u.
+EV charger rating: 7.20 kW
+Assumed power factor: 0.98
+Connection buses: {'18': 0, '25': 0, '30': 0}
+
+------------------------------------------------------------------------
+EVs: 0
+Added EV active power: 0.0000 MW
+Power flow converged: True
+Scenario status: REVIEW
+Minimum voltage: 0.9131 p.u.
+Maximum voltage: 1.0000 p.u.
+Minimum voltage change vs baseline: +0.0000 p.u.
+Buses below 0.95 p.u.: 21
+Buses above 1.05 p.u.: 0
+Voltage violation bus IDs: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]
+New violation bus IDs vs baseline: []
+Active losses: 0.202677 MW
+Lines with assessable ratings: 0
+Lines not assessable: 32
+Assessed line overloads: 0
+------------------------------------------------------------------------
+EVs: 10
+Added EV active power: 0.0720 MW
+Power flow converged: True
+Scenario status: REVIEW
+Minimum voltage: 0.9123 p.u.
+Maximum voltage: 1.0000 p.u.
+Minimum voltage change vs baseline: -0.0008 p.u.
+Buses below 0.95 p.u.: 21
+Buses above 1.05 p.u.: 0
+Voltage violation bus IDs: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]
+New violation bus IDs vs baseline: []
+Active losses: 0.208097 MW
+Lines with assessable ratings: 0
+Lines not assessable: 32
+Assessed line overloads: 0
+------------------------------------------------------------------------
+EVs: 25
+Added EV active power: 0.1800 MW
+Power flow converged: True
+Scenario status: REVIEW
+Minimum voltage: 0.9110 p.u.
+Maximum voltage: 1.0000 p.u.
+Minimum voltage change vs baseline: -0.0021 p.u.
+Buses below 0.95 p.u.: 21
+Buses above 1.05 p.u.: 0
+Voltage violation bus IDs: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]
+New violation bus IDs vs baseline: []
+Active losses: 0.217330 MW
+Lines with assessable ratings: 0
+Lines not assessable: 32
+Assessed line overloads: 0
+------------------------------------------------------------------------
+EVs: 50
+Added EV active power: 0.3600 MW
+Power flow converged: True
+Scenario status: REVIEW
+Minimum voltage: 0.9084 p.u.
+Maximum voltage: 1.0000 p.u.
+Minimum voltage change vs baseline: -0.0047 p.u.
+Buses below 0.95 p.u.: 21
+Buses above 1.05 p.u.: 0
+Voltage violation bus IDs: [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 25, 26, 27, 28, 29, 30, 31, 32]
+New violation bus IDs vs baseline: []
+Active losses: 0.233586 MW
+Lines with assessable ratings: 0
+Lines not assessable: 32
+Assessed line overloads: 0
+
+IMPORTANT LIMITATIONS
+- Steady-state AC power flow only; this is not a time-series study.
+- EV counts are distributed evenly over configured connection buses.
+- Charging is represented as constant active/reactive power.
+- Placeholder benchmark line ratings are not treated as real ratings.
+- INCOMPLETE means some equipment-rating checks cannot be assessed.
+- Results depend on the benchmark, assumptions, and voltage thresholds.
+========================================================================

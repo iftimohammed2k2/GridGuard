@@ -1,0 +1,593 @@
+from pathlib import Path
+import json
+import subprocess
+import sys
+from datetime import datetime
+import pandas as pd
+import plotly.express as px
+import streamlit as st
+
+# ==================================================
+# GRIDGUARD — DISTRIBUTION NETWORK ANALYSIS
+# ==================================================
+
+ROOT = Path(__file__).resolve().parent
+
+CHECKERS = {
+    "Network Data Integrity": "integrity_checker.py",
+    "Baseline Power Flow": "powerflow_checker.py",
+    "Thermal Loading": "thermal_loading_checker.py",
+    "EV Scenario Analysis": "ev_scenario_analyzer.py",
+}
+
+V_MIN = 0.95
+V_MAX = 1.05
+
+st.set_page_config(
+    page_title="GridGuard | Distribution Network Analysis",
+    page_icon="⚡",
+    layout="wide",
+)
+
+# ---------- Styling ----------
+st.markdown(
+    """
+    <style>
+    .block-container {padding-top: 1.7rem; padding-bottom: 2rem;}
+    [data-testid="stMetric"] {
+        background: rgba(128, 128, 128, 0.08);
+        border: 1px solid rgba(128, 128, 128, 0.18);
+        padding: 14px 16px;
+        border-radius: 12px;
+    }
+    div[data-testid="stAlert"] {border-radius: 10px;}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.title("⚡ GridGuard")
+st.caption(
+    "Distribution Network Analysis  ·  Data Integrity  ·  Power Flow  ·  "
+    "Thermal Loading  ·  EV Charging"
+)
+st.info(
+    "Engineering note: results depend on network data, equipment ratings, "
+    "model assumptions, and validation cases. GridGuard is a screening and "
+    "decision-support prototype, not a substitute for an engineering study."
+)
+
+if "run_logs" not in st.session_state:
+    st.session_state.run_logs = {}
+if "last_run_time" not in st.session_state:
+    st.session_state.last_run_time = {}
+
+
+# ---------- File and data helpers ----------
+def read_json(path):
+    try:
+        with path.open("r", encoding="utf-8") as file:
+            return json.load(file)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError):
+        return None
+
+
+def clean_dataframe(df):
+    """Remove exported pandas index columns and tidy column labels."""
+    if df is None:
+        return pd.DataFrame()
+    df = df.copy()
+    df.columns = [str(col).strip() for col in df.columns]
+    unnamed = [
+        col for col in df.columns
+        if col.lower().startswith("unnamed:")
+    ]
+    if unnamed:
+        df = df.drop(columns=unnamed)
+    return df
+
+
+def read_csv(path):
+    try:
+        return clean_dataframe(pd.read_csv(path))
+    except (OSError, pd.errors.ParserError, UnicodeDecodeError, ValueError):
+        return None
+
+
+def get_csv_files():
+    return sorted(p for p in ROOT.glob("*.csv") if p.is_file())
+
+
+def get_report_files():
+    files = []
+    for pattern in ("*.txt", "*.json"):
+        files.extend(ROOT.glob(pattern))
+    return sorted(p for p in files if p.is_file())
+
+
+def scalar_by_keywords(obj, keywords):
+    """Search nested JSON for a scalar whose key matches any keyword."""
+    keywords = [word.lower().replace("-", "_").replace(" ", "_") for word in keywords]
+    if isinstance(obj, dict):
+        # Prefer direct matches at the current level.
+        for key, value in obj.items():
+            normalized = str(key).lower().replace("-", "_").replace(" ", "_")
+            if any(word in normalized for word in keywords):
+                if not isinstance(value, (dict, list)):
+                    return value
+        for value in obj.values():
+            found = scalar_by_keywords(value, keywords)
+            if found is not None:
+                return found
+    elif isinstance(obj, list):
+        for value in obj:
+            found = scalar_by_keywords(value, keywords)
+            if found is not None:
+                return found
+    return None
+
+
+def first_existing_value(obj, keyword_groups):
+    for keywords in keyword_groups:
+        value = scalar_by_keywords(obj, keywords)
+        if value is not None:
+            return value
+    return None
+
+
+def display_value(value, decimals=4):
+    if value is None:
+        return "Not reported"
+    if isinstance(value, bool):
+        return "Yes" if value else "No"
+    if isinstance(value, (int, float)):
+        return f"{value:.{decimals}f}" if isinstance(value, float) else str(value)
+    return str(value)
+
+
+def run_checker(name):
+    """Execute one existing checker without importing or altering its code."""
+    filename = CHECKERS[name]
+    script = ROOT / filename
+
+    if not script.exists():
+        return {
+            "returncode": None,
+            "stdout": "",
+            "stderr": f"File not found: {filename}",
+        }
+
+    try:
+        result = subprocess.run(
+            [sys.executable, str(script)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=180,
+            errors="replace",
+        )
+        return {
+            "returncode": result.returncode,
+            "stdout": result.stdout or "",
+            "stderr": result.stderr or "",
+        }
+    except subprocess.TimeoutExpired:
+        return {
+            "returncode": None,
+            "stdout": "",
+            "stderr": "Timed out after 180 seconds. Check whether the analysis is stuck.",
+        }
+    except Exception as exc:
+        return {"returncode": None, "stdout": "", "stderr": str(exc)}
+
+
+def process_status(name, result):
+    """Describe process execution, not the engineering pass/fail outcome."""
+    if not (ROOT / CHECKERS[name]).exists():
+        return "SCRIPT MISSING"
+    if result is None:
+        return "NOT RUN"
+    if result["returncode"] is None:
+        return "EXECUTION ISSUE"
+    if result["returncode"] != 0:
+        return "PROCESS ERROR"
+    return "PROCESS COMPLETED"
+
+
+def metric_number(value, decimals=4):
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+        if pd.isna(number):
+            return None
+        return number
+    except (TypeError, ValueError):
+        return None
+
+
+def find_column(df, candidates=(), contains=()):
+    if df is None or df.empty:
+        return None
+    lookup = {str(col).lower().strip(): col for col in df.columns}
+    for candidate in candidates:
+        if candidate.lower() in lookup:
+            return lookup[candidate.lower()]
+    for col in df.columns:
+        lower = str(col).lower().strip()
+        if any(term in lower for term in contains):
+            return col
+    return None
+
+
+def show_csv_download(path, label=None):
+    df = read_csv(path)
+    if df is None:
+        st.error(f"Could not read {path.name}.")
+        return
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.download_button(
+        label or f"Download {path.name}",
+        data=path.read_bytes(),
+        file_name=path.name,
+        mime="text/csv",
+        key=f"download_{path.name}",
+    )
+
+
+# ==================================================
+# SIDEBAR — RUN ANALYSES
+# ==================================================
+st.sidebar.title("Analysis Controls")
+st.sidebar.caption("Run your existing GridGuard checkers.")
+
+if st.sidebar.button("▶ Run ALL checks", type="primary", use_container_width=True):
+    progress = st.sidebar.progress(0)
+    for index, name in enumerate(CHECKERS):
+        with st.spinner(f"Running {name}..."):
+            st.session_state.run_logs[name] = run_checker(name)
+            st.session_state.last_run_time[name] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        progress.progress((index + 1) / len(CHECKERS))
+    st.sidebar.success("All checker processes have finished. Review their engineering assessments below.")
+    st.rerun()
+
+for name in CHECKERS:
+    if st.sidebar.button(f"Run: {name}", key=f"run_{name}", use_container_width=True):
+        with st.spinner(f"Running {name}..."):
+            st.session_state.run_logs[name] = run_checker(name)
+            st.session_state.last_run_time[name] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.rerun()
+
+st.sidebar.divider()
+st.sidebar.caption(f"Project folder: {ROOT}")
+st.sidebar.caption("Process completion is not the same as an engineering pass.")
+
+
+# ==================================================
+# OVERVIEW
+# ==================================================
+st.header("Project Overview")
+col1, col2, col3, col4 = st.columns(4)
+with col1:
+    st.metric("Analysis modules", len(CHECKERS))
+with col2:
+    st.metric("Processes run this session", sum(name in st.session_state.run_logs for name in CHECKERS))
+with col3:
+    st.metric("CSV result files", len(get_csv_files()))
+with col4:
+    st.metric("Text / JSON reports", len(get_report_files()))
+
+st.subheader("Checker Execution Status")
+for name, filename in CHECKERS.items():
+    result = st.session_state.run_logs.get(name)
+    status = process_status(name, result)
+    last_run = st.session_state.last_run_time.get(name, "Not run this session")
+    with st.expander(f"{name} — {status}", expanded=(status in {"PROCESS ERROR", "EXECUTION ISSUE", "SCRIPT MISSING"})):
+        st.write(f"Script: `{filename}`")
+        st.caption(f"Last run: {last_run}")
+        if result is None:
+            st.write("Use the sidebar to run this checker.")
+        else:
+            st.write(f"Process return code: `{result['returncode']}`")
+            if result["stdout"].strip():
+                st.text_area("Console output", result["stdout"], height=160, key=f"stdout_{name}")
+            if result["stderr"].strip():
+                st.text_area("Errors / warnings", result["stderr"], height=130, key=f"stderr_{name}")
+            if result["returncode"] not in (0, None):
+                st.error("The script exited with an error. Inspect the output above.")
+            elif result["returncode"] == 0:
+                st.success("The script process completed. Read the engineering report to determine the actual assessment result.")
+
+st.warning(
+    "GridGuard deliberately separates software execution status from engineering status. "
+    "A script can complete successfully while reporting REVIEW, INCOMPLETE, or a network violation."
+)
+
+
+# ==================================================
+# RESULTS TABS
+# ==================================================
+tab_integrity, tab_power, tab_thermal, tab_ev, tab_reports = st.tabs(
+    ["🛡️ Data Integrity", "⚡ Power Flow", "🌡️ Thermal Loading", "🚗 EV Scenarios", "📄 Reports & Data"]
+)
+
+with tab_integrity:
+    st.subheader("Network Data Integrity")
+    st.write("Use this section to inspect the integrity checker's own output and reports.")
+    integrity_files = [p for p in get_report_files() if "integrity" in p.name.lower()]
+    if integrity_files:
+        for path in integrity_files:
+            st.markdown(f"**{path.name}**")
+            if path.suffix.lower() == ".txt":
+                st.text(path.read_text(encoding="utf-8", errors="replace"))
+            else:
+                data = read_json(path)
+                if data is not None:
+                    st.json(data)
+                else:
+                    st.error(f"Could not parse {path.name}.")
+    else:
+        result = st.session_state.run_logs.get("Network Data Integrity")
+        if result and result["stdout"].strip():
+            st.text_area("Integrity checker output", result["stdout"], height=220, key="integrity_output_tab")
+        st.info("No report with 'integrity' in its filename was found. Check the checker output and actual output filenames.")
+
+
+with tab_power:
+    st.subheader("Baseline Voltage & Power Flow")
+    power_json = ROOT / "baseline_summary.json"
+    summary = read_json(power_json) if power_json.exists() else None
+
+    if summary is not None:
+        converged = first_existing_value(summary, [["converged"], ["convergence"]])
+        min_voltage = metric_number(first_existing_value(summary, [["min_voltage"], ["minimum_voltage"], ["vm_min"]]))
+        low_buses = first_existing_value(summary, [["low_voltage_buses"], ["low_voltage"], ["undervoltage_buses"], ["undervoltage"]])
+        a, b, c = st.columns(3)
+        a.metric("Power flow converged", display_value(converged))
+        b.metric("Minimum voltage (p.u.)", display_value(min_voltage, 4))
+        c.metric("Low-voltage buses", display_value(low_buses, 0))
+        with st.expander("Full baseline JSON"):
+            st.json(summary)
+    else:
+        st.info("Run Baseline Power Flow to generate baseline results.")
+
+    bus_path = ROOT / "baseline_bus_results.csv"
+    if bus_path.exists():
+        buses = read_csv(bus_path)
+        if buses is None or buses.empty:
+            st.error("Bus results CSV could not be read or contains no rows.")
+        else:
+            voltage_col = find_column(
+                buses,
+                candidates=("vm_pu", "voltage_pu", "voltage (p.u.)"),
+                contains=("vm_pu", "voltage_pu", "voltage_p.u"),
+            )
+            bus_col = find_column(
+                buses,
+                candidates=("bus", "bus_id", "bus_name", "name", "index"),
+                contains=("bus_id", "bus_name"),
+            )
+            st.markdown("**Bus voltage results**")
+            display_buses = buses.copy()
+            if voltage_col:
+                display_buses[voltage_col] = pd.to_numeric(display_buses[voltage_col], errors="coerce").round(4)
+            st.dataframe(display_buses, use_container_width=True, hide_index=True)
+
+            if voltage_col:
+                plot_data = buses.copy()
+                plot_data[voltage_col] = pd.to_numeric(plot_data[voltage_col], errors="coerce")
+                plot_data = plot_data.dropna(subset=[voltage_col])
+                plot_data["_bus_label"] = (
+                    plot_data[bus_col].astype(str) if bus_col else plot_data.index.astype(str)
+                )
+                plot_data["_screening"] = plot_data[voltage_col].apply(
+                    lambda value: "Below 0.95 p.u." if value < V_MIN
+                    else ("Above 1.05 p.u." if value > V_MAX else "Within screening band")
+                )
+                if not plot_data.empty:
+                    fig = px.bar(
+                        plot_data,
+                        x="_bus_label",
+                        y=voltage_col,
+                        color="_screening",
+                        hover_data=[voltage_col, "_screening"],
+                        title="Voltage by bus (zoomed to the observed voltage range)",
+                        labels={"_bus_label": "Bus", voltage_col: "Voltage (p.u.)", "_screening": "Screening result"},
+                    )
+                    observed_min = float(plot_data[voltage_col].min())
+                    observed_max = float(plot_data[voltage_col].max())
+                    # Keep both screening limits visible while making small voltage differences legible.
+                    y_min = min(V_MIN - 0.03, observed_min - 0.015)
+                    y_max = max(V_MAX + 0.02, observed_max + 0.015)
+                    fig.update_yaxes(range=[y_min, y_max], tickformat=".3f")
+                    fig.add_hline(y=V_MIN, line_dash="dash", line_color="#E6A23C",
+                                  annotation_text="Lower screening limit: 0.95 p.u.")
+                    fig.add_hline(y=V_MAX, line_dash="dash", line_color="#D9534F",
+                                  annotation_text="Upper screening limit: 1.05 p.u.")
+                    fig.update_layout(legend_title_text="Voltage screening", xaxis_tickangle=-45)
+                    st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("Could not identify a voltage column. Available columns: " + ", ".join(map(str, buses.columns)))
+
+    line_path = ROOT / "baseline_line_results.csv"
+    if line_path.exists():
+        with st.expander("Baseline line results"):
+            line_df = read_csv(line_path)
+            if line_df is not None:
+                st.dataframe(line_df, use_container_width=True, hide_index=True)
+                st.download_button(
+                    "Download baseline line results",
+                    data=line_path.read_bytes(),
+                    file_name=line_path.name,
+                    mime="text/csv",
+                    key="download_baseline_lines",
+                )
+            else:
+                st.error("Could not read baseline line results.")
+
+
+with tab_thermal:
+    st.subheader("Line & Transformer Thermal Loading")
+    thermal_json = ROOT / "thermal_summary.json"
+    thermal_summary = read_json(thermal_json) if thermal_json.exists() else None
+    if thermal_summary is not None:
+        status_value = first_existing_value(thermal_summary, [["assessment_status"], ["overall_status"], ["status"]])
+        if status_value is not None:
+            st.metric("Thermal assessment status", str(status_value))
+        st.json(thermal_summary)
+    else:
+        st.info("Run Thermal Loading to generate the thermal assessment.")
+
+    thermal_csv = ROOT / "thermal_results.csv"
+    if thermal_csv.exists():
+        thermal = read_csv(thermal_csv)
+        if thermal is not None:
+            st.dataframe(thermal, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download thermal results",
+                data=thermal_csv.read_bytes(),
+                file_name=thermal_csv.name,
+                mime="text/csv",
+                key="download_thermal_results",
+            )
+        else:
+            st.error("Could not read thermal results.")
+
+    st.warning(
+        "The current case33bw benchmark uses placeholder line-rating values. "
+        "Lines marked NOT ASSESSABLE must not be treated as verified overloads "
+        "or as evidence of safe operation. Use documented, realistic equipment ratings "
+        "before making thermal conclusions."
+    )
+
+
+with tab_ev:
+    st.subheader("EV Charging Scenario Comparison")
+    st.write(
+        "This view displays results produced by the existing scenario analyzer. "
+        "It does not yet change the analyzer's EV assumptions from the dashboard."
+    )
+    ev_json = ROOT / "ev_scenario_summary.json"
+    ev_summary = read_json(ev_json) if ev_json.exists() else None
+    if ev_summary is not None:
+        with st.expander("Scenario summary JSON"):
+            st.json(ev_summary)
+
+    ev_csv = ROOT / "ev_scenario_summary.csv"
+    if ev_csv.exists():
+        scenarios = read_csv(ev_csv)
+        if scenarios is not None and not scenarios.empty:
+            st.dataframe(scenarios.round(4), use_container_width=True, hide_index=True)
+            scenario_col = find_column(
+                scenarios,
+                candidates=("ev_count", "num_evs", "number_of_evs", "scenario", "scenario_name"),
+                contains=("ev_count", "num_evs", "number_of_evs", "scenario"),
+            )
+            voltage_col = find_column(
+                scenarios,
+                candidates=("min_voltage_pu", "minimum_voltage_pu", "min_voltage", "min_vm_pu"),
+                contains=("min_voltage", "minimum_voltage", "min_vm"),
+            )
+            if scenario_col and voltage_col:
+                chart = scenarios.copy()
+                chart[voltage_col] = pd.to_numeric(chart[voltage_col], errors="coerce")
+                chart = chart.dropna(subset=[voltage_col])
+                fig = px.line(
+                    chart, x=scenario_col, y=voltage_col, markers=True,
+                    title="Minimum voltage across EV scenarios",
+                    labels={scenario_col: "EV scenario", voltage_col: "Minimum voltage (p.u.)"},
+                )
+                values = chart[voltage_col]
+                if not values.empty:
+                    low = min(float(values.min()) - 0.015, V_MIN - 0.02)
+                    high = max(float(values.max()) + 0.015, V_MIN + 0.02)
+                    fig.update_yaxes(range=[low, high], tickformat=".4f")
+                fig.add_hline(y=V_MIN, line_dash="dash", annotation_text="Lower screening limit: 0.95 p.u.")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.caption("No matching EV-count and minimum-voltage columns were found; the table remains available.")
+        else:
+            st.error("EV scenario summary CSV could not be read or contains no rows.")
+    else:
+        st.info("Run EV Scenario Analysis to generate scenario results.")
+
+    bus_scenarios = ROOT / "ev_scenario_bus_results.csv"
+    if bus_scenarios.exists():
+        with st.expander("Per-bus EV scenario results"):
+            bus_df = read_csv(bus_scenarios)
+            if bus_df is not None:
+                st.dataframe(bus_df.round(4), use_container_width=True, hide_index=True)
+                st.download_button(
+                    "Download per-bus EV results",
+                    data=bus_scenarios.read_bytes(),
+                    file_name=bus_scenarios.name,
+                    mime="text/csv",
+                    key="download_ev_bus",
+                )
+            else:
+                st.error("Could not read per-bus EV results.")
+
+    st.warning(
+        "A bus already below the voltage limit in the baseline is not automatically "
+        "an EV-caused violation. Attribution requires comparing each bus against the "
+        "baseline and identifying newly violated or worsened buses."
+    )
+
+
+with tab_reports:
+    st.subheader("Generated Reports & CSV Files")
+    st.write("Inspect or download the files generated by your existing modules.")
+    report_files = get_report_files()
+    csv_files = get_csv_files()
+
+    if not report_files and not csv_files:
+        st.info("No report files found yet. Run one or more checks first.")
+
+    if report_files:
+        report_choice = st.selectbox(
+            "Choose a report",
+            report_files,
+            format_func=lambda path: path.name,
+            key="report_choice",
+        )
+        if report_choice.suffix.lower() == ".json":
+            report_data = read_json(report_choice)
+            if report_data is not None:
+                st.json(report_data)
+            else:
+                st.error(f"Could not parse {report_choice.name}.")
+        else:
+            st.text(report_choice.read_text(encoding="utf-8", errors="replace"))
+        st.download_button(
+            "Download selected report",
+            data=report_choice.read_bytes(),
+            file_name=report_choice.name,
+            mime="application/json" if report_choice.suffix.lower() == ".json" else "text/plain",
+            key="download_selected_report",
+        )
+
+    if csv_files:
+        csv_choice = st.selectbox(
+            "Choose a CSV result",
+            csv_files,
+            format_func=lambda path: path.name,
+            key="csv_choice",
+        )
+        csv_df = read_csv(csv_choice)
+        if csv_df is not None:
+            st.dataframe(csv_df, use_container_width=True, hide_index=True)
+            st.download_button(
+                "Download selected CSV",
+                data=csv_choice.read_bytes(),
+                file_name=csv_choice.name,
+                mime="text/csv",
+                key="download_selected_csv",
+            )
+        else:
+            st.error(f"Could not display {csv_choice.name}.")
+
+st.divider()
+st.caption(
+    "GridGuard MVP · Screening and decision support only. "
+    "All findings require appropriate engineering review before operational use."
+)
