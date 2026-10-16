@@ -1,0 +1,6 @@
+pandapower
+pandas
+numpy
+plotly
+streamlit
+pytest
