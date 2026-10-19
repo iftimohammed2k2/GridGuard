@@ -1,0 +1,4 @@
+id,from_bus,to_bus,length_km,r_ohm_per_km,x_ohm_per_km,max_i_ka
+MEL1,ME1,ME2,3.0,0.1,0.1,0.8
+MET1,ME2,ME3,0.0,0.0,0.0,2.0
+MET2,ME3,ME4,0.0,0.0,0.0,1.0

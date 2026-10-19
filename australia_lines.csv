@@ -1,0 +1,5 @@
+id,from_bus,to_bus,length_km,r_ohm_per_km,x_ohm_per_km,max_i_ka
+AUL1,AU1,AU2,5.0,0.25,0.2,0.3
+AUL2,AU2,AU3,8.0,0.25,0.2,0.3
+AUL3,AU3,AU4,6.0,0.25,0.2,0.3
+AUT1,AU4,AU5,0.0,0.0,0.0,1.0

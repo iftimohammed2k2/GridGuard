@@ -1,4 +1,5 @@
-id,nominal_kv
-B1,11
-B2,11
-B3,11
+id,nominal_kv,is_slack,load_p_mw,load_q_mvar,x_coord,y_coord
+B1,11,True,0,0,0,0
+B2,11,False,0.8,0.3,10,5
+B3,11,False,0.5,0.2,20,10
+B4,0.4,False,0.2,0.1,25,15

@@ -1,3 +1,4 @@
-id,from_bus,to_bus,length_km,r_ohm_per_km,x_ohm_per_km
-L1,B1,B2,1.5,0.25,0.12
-L2,B2,B3,0.8,0.30,0.15
+id,from_bus,to_bus,length_km,r_ohm_per_km,x_ohm_per_km,max_i_ka
+L1,B1,B2,1.5,0.25,0.12,0.4
+L2,B2,B3,0.8,0.30,0.15,0.4
+T1,B3,B4,0.0,0.0,0.0,1.0

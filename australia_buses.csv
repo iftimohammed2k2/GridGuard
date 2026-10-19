@@ -1,0 +1,6 @@
+id,nominal_kv,is_slack,load_p_mw,load_q_mvar
+AU1,11,True,0,0
+AU2,11,False,0.5,0.1
+AU3,11,False,0.4,0.1
+AU4,11,False,0.3,0.1
+AU5,0.4,False,0.2,0.1

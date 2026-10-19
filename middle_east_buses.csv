@@ -1,0 +1,5 @@
+id,nominal_kv,is_slack,load_p_mw,load_q_mvar
+ME1,33,True,0,0
+ME2,33,False,8.0,3.0
+ME3,11,False,5.0,2.0
+ME4,0.4,False,2.5,1.0

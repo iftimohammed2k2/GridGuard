@@ -1,0 +1,4 @@
+id,from_bus,to_bus,length_km,r_ohm_per_km,x_ohm_per_km,max_i_ka
+NOL1,NO1,NO2,15.0,0.12,0.15,0.2
+NOL2,NO2,NO3,25.0,0.12,0.15,0.2
+NOT1,NO3,NO4,0.0,0.0,0.0,1.0

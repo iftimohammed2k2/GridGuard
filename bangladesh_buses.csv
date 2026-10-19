@@ -1,0 +1,5 @@
+id,nominal_kv,is_slack,load_p_mw,load_q_mvar
+BD1,11,True,0,0
+BD2,11,False,2.5,1.2
+BD3,11,False,3.0,1.5
+BD4,0.4,False,1.5,0.8

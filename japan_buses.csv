@@ -1,0 +1,5 @@
+id,nominal_kv,is_slack,load_p_mw,load_q_mvar
+JP1,6.6,True,0,0
+JP2,6.6,False,1.8,0.6
+JP3,6.6,False,2.2,0.8
+JP4,0.2,False,0.9,0.3

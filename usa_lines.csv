@@ -1,0 +1,5 @@
+id,from_bus,to_bus,length_km,r_ohm_per_km,x_ohm_per_km,max_i_ka
+USL1,US1,US2,2.0,0.2,0.1,0.5
+USL2,US2,US3,1.5,0.2,0.1,0.5
+USL3,US3,US4,1.0,0.2,0.1,0.5
+UST1,US4,US5,0.0,0.0,0.0,1.0
